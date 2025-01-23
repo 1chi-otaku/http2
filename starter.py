@@ -2,7 +2,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import os
 
 static_files_path = r"C:/Users/1chi/http/wwwroot"
-
+#
 class MainHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         #print('self.path', self.path)
