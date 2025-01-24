@@ -14,6 +14,12 @@ def ucfirst(input: str):
 
 class MainHandler(BaseHTTPRequestHandler):
 
+    def parse_urlencoded(self, input: str) -> dict:
+        return dict(
+            pair.split('=', maxsplit=1) if '=' in pair else (pair, None)
+            for pair in input.split('&') if pair != ""
+        ) if input is not None else {}
+
     def serve(self):
         if '?' in self.path:
             path, qs = map(urllib.parse.unquote, self.path.split('?', 1)) 
@@ -29,10 +35,7 @@ class MainHandler(BaseHTTPRequestHandler):
                 self.send_file(fname)
                 return
         
-        query_parameters = dict(
-            pair.split('=', maxsplit=1) if '=' in pair else (pair, None)
-            for pair in qs.split('&') if pair != ""
-        ) if qs is not None else {}
+        self.query_parameters = self.parse_urlencoded(qs)
         
         # Разделяем путь на части (Controller/Action/Slug)
         parts = path.strip('/').split('/', maxsplit=3)

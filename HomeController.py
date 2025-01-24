@@ -12,8 +12,13 @@ class HomeController :
             content_type = self.handler.headers.get("Content-Type", 
                 self.handler.headers.get("content-type", None))
             if content_type == 'application/x-www-form-urlencoded':
-                body = self.handler.rfile.read(int(self.handler.headers.get('Content-Length'))).decode()
-                return ActionResult(type='Redirect', code=302, payload=f"/Home/Signup")
+                body = self.handler.parse_urlencoded(self.handler.rfile.read(int(self.handler.headers.get('Content-Length'))).decode())
+                user_name = body.get('user-name', '')
+                if user_name == '':
+                    return ActionResult(type='Redirect', code=302, payload=f"/Home/Signup?msg=Error")
+                else:
+                    return ActionResult(type='Redirect', code=302, payload=f"/Home/Signup?user-name=" + user_name)
+
             else:
                 return ActionResult(type='Error', code=415, payload=f"Content-Type '{content_type}' not supported")
         else:
@@ -23,4 +28,10 @@ class HomeController :
                 return ActionResult(view.read())
             
     def signup(self) -> ActionResult :
-        return ActionResult("Congrats with registr")
+        params = self.handler.query_parameters
+        user_name = params.get('user-name', None)
+
+        if user_name is not None:
+            return ActionResult("Congrats with registr, " + user_name)
+        else:
+            return ActionResult("Error with register: " + params.get('msg', ''))
