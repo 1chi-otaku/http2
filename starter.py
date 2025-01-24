@@ -15,17 +15,6 @@ def ucfirst(input: str):
 class MainHandler(BaseHTTPRequestHandler):
 
     def serve(self):
-        return 0
-        
-        
-
-        
-    
-
-
-
-    def do_GET(self):
-        # Разбираем путь и параметры запроса
         if '?' in self.path:
             path, qs = map(urllib.parse.unquote, self.path.split('?', 1)) 
         else:
@@ -34,11 +23,11 @@ class MainHandler(BaseHTTPRequestHandler):
         if '../' in path:
             self.send_404()
 
-
-        fname = static_files_path + path
-        if os.path.isfile(fname):
-            self.send_file(fname)
-            return
+        if self.command == "GET":
+             fname = static_files_path + path
+             if os.path.isfile(fname):
+                self.send_file(fname)
+                return
         
         query_parameters = dict(
             pair.split('=', maxsplit=1) if '=' in pair else (pair, None)
@@ -48,12 +37,12 @@ class MainHandler(BaseHTTPRequestHandler):
         # Разделяем путь на части (Controller/Action/Slug)
         parts = path.strip('/').split('/', maxsplit=3)
         
-        controller = parts[0] if len(parts) > 0 else 'home'
-        action = parts[1] if len(parts) > 1 else 'index'
-        slug = parts[2] if len(parts) > 2 else None
+        self.controller = parts[0] if len(parts) > 0 else 'home'
+        self.action = parts[1] if len(parts) > 1 else 'index'
+        self.slug = parts[2] if len(parts) > 2 else None
 
         # Формируем имя контроллера
-        controller_name = ucfirst(controller) + "Controller"
+        controller_name = ucfirst(self.controller) + "Controller"
         controller_module = getattr(sys.modules[__name__], controller_name, None)
         
         if controller_module is None:
@@ -65,28 +54,44 @@ class MainHandler(BaseHTTPRequestHandler):
         if controller_class is None:
             self.send_404()
             return
-        controller_instance = controller_class()
+        controller_instance = controller_class(self)
 
-        controller_action = getattr(controller_instance, action.lower(), None)
+        controller_action = getattr(controller_instance, self.action.lower(), None)
         if controller_action is None:
             self.send_404()
             return
-        
-        with open(static_files_path + '/index.html', 'r', encoding='utf-8') as f:
-            layout = f.read()
-        layout_body = controller_action()
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/html')
-        self.end_headers()
+        action_result = controller_action()
+        if action_result.type == 'View':   
+            with open(static_files_path + '/index.html', 'r', encoding='utf-8') as f:
+                layout = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(layout.replace('@RenderBody',action_result.payload).encode())  
+        elif action_result.type == "Error":
+            self.send_response(action_result.code)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(action_result.payload.encode())  
+        elif action_result.type == "Redirect":
+            self.send_response(action_result.code if action_result.code in(301,302) else 301)
+            self.send_header('Location', action_result.payload)
+            self.end_headers()
+     
 
-        self.wfile.write(layout.replace('@RenderBody',layout_body).encode())     
+       
 
     def do_POST(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/html')
-        self.end_headers()
+        self.serve()
+        
+    
+    def do_GET(self):
+        self.serve()
 
-        self.wfile.write(b"POST works")  
+
+
+        
+        
         
     def send_404(self):
         self.send_response(404)
