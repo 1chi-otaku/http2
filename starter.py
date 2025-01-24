@@ -14,6 +14,16 @@ def ucfirst(input: str):
 
 class MainHandler(BaseHTTPRequestHandler):
 
+    def serve(self):
+        return 0
+        
+        
+
+        
+    
+
+
+
     def do_GET(self):
         # Разбираем путь и параметры запроса
         if '?' in self.path:
@@ -71,6 +81,13 @@ class MainHandler(BaseHTTPRequestHandler):
 
         self.wfile.write(layout.replace('@RenderBody',layout_body).encode())     
 
+    def do_POST(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+
+        self.wfile.write(b"POST works")  
+        
     def send_404(self):
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
