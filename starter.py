@@ -24,7 +24,8 @@ class MainHandler(BaseHTTPRequestHandler):
         if '../' in path:
             self.send_404()
 
-        fname = static_files_path + (self.path if self.path != '/' else '/index.html')
+
+        fname = static_files_path + path
         if os.path.isfile(fname):
             self.send_file(fname)
             return
