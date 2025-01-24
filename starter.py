@@ -1,36 +1,74 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import os
+import os, sys
+import urllib.parse
+import HomeController
 
 static_files_path = r"C:/Users/1chi/http/wwwroot"
-#
-class MainHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        #print('self.path', self.path)
-        
-        if '?' in self.path:
-            (path,qs) = self.path.split('?', 1)
-        else:
-            path,qs = self.path, None
 
-        print ('path', path)
-        print ('qs', qs)
+def ucfirst(input: str):
+    if len(input) == 0:
+        return input
+    if len(input) == 1:
+        return input[0].upper()
+    return input[0].upper() + input[1:].lower()
+
+class MainHandler(BaseHTTPRequestHandler):
+
+    def do_GET(self):
+        # Разбираем путь и параметры запроса
+        if '?' in self.path:
+            path, qs = map(urllib.parse.unquote, self.path.split('?', 1)) 
+        else:
+            path, qs = urllib.parse.unquote(self.path), None
 
         if '../' in path:
-            self.send_404(self)
+            self.send_404()
 
-#         query_string = urllib.parse.unquote( envs['QUERY_STRING'], encoding="utf-8" )
-# query_parameters = dict( pair.split('=', maxsplit = 1) if '=' in pair else (pair, None)
-#                     for pair in query_string.split('&') if pair != "" )
-
-
-        fname = static_files_path + (self.path if self.path!= '/' else '/index.html')
-        print(fname)
+        fname = static_files_path + (self.path if self.path != '/' else '/index.html')
         if os.path.isfile(fname):
             self.send_file(fname)
             return
-        self.send_404(self)
+        
+        query_parameters = dict(
+            pair.split('=', maxsplit=1) if '=' in pair else (pair, None)
+            for pair in qs.split('&') if pair != ""
+        ) if qs is not None else {}
+        
+        # Разделяем путь на части (Controller/Action/Slug)
+        parts = path.strip('/').split('/', maxsplit=3)
+        
+        controller = parts[0] if len(parts) > 0 else 'home'
+        action = parts[1] if len(parts) > 1 else 'index'
+        slug = parts[2] if len(parts) > 2 else None
 
-       
+        # Формируем имя контроллера
+        controller_name = ucfirst(controller) + "Controller"
+        controller_module = getattr(sys.modules[__name__], controller_name, None)
+        
+        if controller_module is None:
+            self.send_404()
+            return
+
+        # Проверяем есть ли в классе-контроллере метод с именем, как в переменной action
+        controller_class = getattr(controller_module, controller_name, None)
+        if controller_class is None:
+            self.send_404()
+            return
+        controller_instance = controller_class()
+
+        controller_action = getattr(controller_instance, action.lower(), None)
+        if controller_action is None:
+            self.send_404()
+            return
+        
+        with open(static_files_path + '/index.html', 'r', encoding='utf-8') as f:
+            layout = f.read()
+        layout_body = controller_action()
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+
+        self.wfile.write(layout.replace('@RenderBody',layout_body).encode())     
 
     def send_404(self):
         self.send_response(404)
@@ -39,17 +77,23 @@ class MainHandler(BaseHTTPRequestHandler):
         with open(static_files_path + '/404.html', 'rb') as f:
             self.wfile.write(f.read())
 
-
-
     def send_file(self, fname):
         ext = fname.split('.')[-1] if '.' in fname else ''
-        if ext in ('py', 'php'): self.send_404(); return
-        if ext == 'txt' :  mime_type = 'text/plain'
-        elif ext == 'ico': mime_type = 'image/x-icon'
-        elif ext == 'js':  mime_type = 'text/javascript'
-        elif ext in ('html', 'css'): mime_type = 'text/' + ext
-        elif ext in ('jpg', 'jpeg'): mime_type = 'image/jpeg' + ext
-        elif ext in ('png', 'bmp', 'gif'): mime_type = 'image/' + ext
+        if ext in ('py', 'php'):
+            self.send_404()
+            return
+        if ext == 'txt':
+            mime_type = 'text/plain'
+        elif ext == 'ico':
+            mime_type = 'image/x-icon'
+        elif ext == 'js':
+            mime_type = 'text/javascript'
+        elif ext in ('html', 'css'):
+            mime_type = 'text/' + ext
+        elif ext in ('jpg', 'jpeg'):
+            mime_type = 'image/jpeg'
+        elif ext in ('png', 'bmp', 'gif'):
+            mime_type = 'image/' + ext
         else:
             mime_type = 'application/octet-stream'
 
@@ -59,9 +103,6 @@ class MainHandler(BaseHTTPRequestHandler):
         with open(fname, 'rb') as f:
             self.wfile.write(f.read())
 
-
-
-
 def main():
     httpServer = HTTPServer(('127.0.0.1', 81), MainHandler)
     try:
@@ -70,71 +111,5 @@ def main():
     except:
         print("Server stopped")
 
-
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-'''
-
- Власний сервер. HTTP.
- Інший підхід до стоверння серверних програм - власний сервер
- відповідною мовою програмування
- + Немає потреби у сторонньому сервері
- - Такі сервери зазвичай повільніші
- + Робота єдиною мовою програмування
- - Потреба у гарантії вільного порту
- + Самостійний деплой, у т.ч. хостінга
- - Аналіз параметрів запиту - задача програми
- CGI- не "рідний" сторонній (окремий) сервер
-HTTP - власний сервер (як частина коду)
- Host - "рідний" сторонній сервер
-
-
-
- Запуск сервера:
- зазвичай клас сервера надаэться мовою (библиотекой)
- сервер стартует по адресу (IP:port) и "зависает" - переходит у постоенное слушание
- с каждыйм запросом сервер запускает функцию-обработчик или объект 
-
- Формировання ответа:
- согласно структуре пакета HTTPP необходимо формировати три состовляющие:
- - статус код и фразу
- - заголовки
- - тело ответа
-
- Разные библиотеки могут давать разные способы для упрощения их формирования, 
- в частности у HTTPServer  необходимо формировать все три. Минимальный ответ выглядит так:
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/html')
-        self.end_headers()
-        self.wfile.write( b"<h1>Works</h1>")
-
-        
-404: запрос для сервера - всего лишь строчка, который он обрабаботав передает в функцию-обработчик
-Понятие "не найдено" для сервера не существует, это задача обработчика. 
-
-Дополнительно к задаче 404 есть задача отсылания статически файлов, а также ограниченеи
-доступа к "службовим" файлам.
-а) слздать отдельную директорию для статический фалйов
-б) добавить фильтр для расширенных файлов.
-
-Классическая задача - обеспечить работу стилией и JS
-
-Передача параметров и маршрутизация
-Проверить:
-    Отделяеются ли части URL hash (#), query (?) [не отделяются]
-    Разделяется ли query string [не разделяются]
-    Проводится ли декодирование URL параметров [не проводится]
-
-
-
-
-
-'''
-
-
